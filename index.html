@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Narzędzia VPN — Generator haseł i TOTP</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242736;
+      --border: #2e3248;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e8eaf6;
+      --muted: #8b8fa8;
+      --danger: #ff6b6b;
+      --success: #00d4aa;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      position: relative;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: .5rem;
+    }
+    header p { color: var(--muted); font-size: .95rem; }
+
+    .lang-toggle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: .25rem .55rem;
+      border-radius: 5px;
+      transition: background .15s, color .15s;
+    }
+    .lang-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.5rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .card-title .icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .icon-pw   { background: linear-gradient(135deg,#6c63ff,#a78bfa); }
+    .icon-totp { background: linear-gradient(135deg,#00d4aa,#0ea5e9); }
+
+    label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .35rem;
+    }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: .6rem .85rem;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 1rem;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .options-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+    .opt-group { flex: 1; min-width: 130px; }
+    .opt-group label { margin-bottom: .35rem; }
+
+    .checkrow {
+      display: flex; flex-wrap: wrap;
+      gap: .5rem 1rem; margin-bottom: 1rem;
+    }
+    .checkrow label {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .85rem; text-transform: none; letter-spacing: 0;
+      color: var(--text); cursor: pointer;
+    }
+    input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+    .btn {
+      width: 100%; padding: .75rem 1rem;
+      border: none; border-radius: 8px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: linear-gradient(135deg,#6c63ff,#a78bfa); color: #fff; }
+    .btn-teal    { background: linear-gradient(135deg,#00d4aa,#0ea5e9); color: #fff; }
+    .btn:hover { opacity: .9; }
+
+    .result-box {
+      margin-top: 1.25rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: none;
+    }
+    .result-box.show { display: block; }
+
+    .result-row {
+      display: flex; align-items: center;
+      gap: .5rem; margin-bottom: .75rem;
+    }
+    .result-value {
+      flex: 1;
+      font-family: 'Cascadia Code','Consolas',monospace;
+      font-size: 1rem;
+      word-break: break-all;
+      color: var(--accent2);
+      line-height: 1.4;
+    }
+    .copy-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: .3rem .6rem;
+      font-size: .75rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+    .result-label {
+      font-size: .75rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem;
+    }
+    .result-block { margin-bottom: 1rem; }
+    .result-block:last-child { margin-bottom: 0; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .2rem .55rem; border-radius: 20px;
+      font-size: .72rem; font-weight: 600; margin-top: .35rem;
+    }
+    .badge-strong { background: rgba(0,212,170,.15); color: var(--success); }
+    .badge-medium { background: rgba(255,193,7,.15);  color: #ffc107; }
+    .badge-weak   { background: rgba(255,107,107,.15);color: var(--danger); }
+
+    #qr-container { display: flex; justify-content: center; margin-top: .75rem; }
+    #qr-container canvas, #qr-container img {
+      border-radius: 8px; border: 6px solid #fff;
+    }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
+    footer {
+      text-align: center; margin-top: 3rem;
+      color: var(--muted); font-size: .8rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1 data-i18n="title">Narzędzia VPN</h1>
+  <p data-i18n="subtitle">Generator łatwych do zapamiętania haseł i konfiguracja TOTP / Google Authenticator</p>
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="setLang('pl')">PL</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ── PASSWORD GENERATOR ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon icon-pw">🔑</span>
+      <span data-i18n="pwCardTitle">Generator haseł VPN</span>
+    </div>
+
+    <div class="options-row">
+      <div class="opt-group">
+        <label data-i18n="styleLabel">Styl</label>
+        <select id="pw-style">
+          <option value="words"  data-i18n="styleWords">Łatwe do zapamiętania</option>
+          <option value="random" data-i18n="styleRandom">Losowe znaki</option>
+        </select>
+      </div>
+      <div class="opt-group" id="words-count-wrap">
+        <label data-i18n="wordCountLabel">Liczba słów</label>
+        <select id="pw-words">
+          <option value="2" data-i18n="words2">2 słowa</option>
+          <option value="3" selected data-i18n="words3">3 słowa</option>
+          <option value="4" data-i18n="words4">4 słowa</option>
+        </select>
+      </div>
+      <div class="opt-group" id="random-len-wrap" style="display:none">
+        <label data-i18n="lengthLabel">Długość</label>
+        <input type="number" id="pw-len" value="16" min="8" max="64" />
+      </div>
+    </div>
+
+    <div id="word-options">
+      <div class="options-row">
+        <div class="opt-group">
+          <label data-i18n="sepLabel">Separator</label>
+          <select id="pw-sep">
+            <option value="-"  data-i18n="sepDash">Myślnik  (słowo-słowo)</option>
+            <option value="."  data-i18n="sepDot">Kropka  (słowo.słowo)</option>
+            <option value="_"  data-i18n="sepUnder">Podkreślnik  (słowo_słowo)</option>
+            <option value=""   data-i18n="sepNone" selected>Brak  (słowosłowo)</option>
+          </select>
+        </div>
+        <div class="opt-group">
+          <label data-i18n="capLabel">Wielkie litery</label>
+          <select id="pw-cap">
+            <option value="first" selected data-i18n="capFirst">Pierwsza litera</option>
+            <option value="all"   data-i18n="capAll">Wszystkie słowa</option>
+            <option value="none"  data-i18n="capNone">Brak</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="checkrow">
+      <label><input type="checkbox" id="pw-digits" checked /> <span data-i18n="addDigits">Dodaj cyfry</span></label>
+      <label><input type="checkbox" id="pw-symbol" checked /> <span data-i18n="addSymbol">Dodaj symbol</span></label>
+    </div>
+
+    <div>
+      <label data-i18n="countLabel">Ile haseł</label>
+      <input type="number" id="pw-count" value="3" min="1" max="10" style="max-width:100px; margin-bottom:.75rem;" />
+    </div>
+
+    <button class="btn btn-primary" onclick="generatePasswords()" data-i18n="generatePw">Generuj hasła</button>
+    <div class="result-box" id="pw-results"></div>
+  </div>
+
+  <!-- ── TOTP GENERATOR ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon icon-totp">🛡️</span>
+      <span data-i18n="totpCardTitle">TOTP / Google Authenticator</span>
+    </div>
+
+    <label data-i18n="totpLabelLabel">Nazwa konta</label>
+    <input type="text" id="totp-label" data-i18n-placeholder="totpLabelPlaceholder" placeholder="np. JanNowak" />
+
+    <label data-i18n="totpIssuerLabel">Wydawca</label>
+    <input type="text" id="totp-issuer" value="Cyfrowe VPN" />
+
+    <div class="opt-group">
+      <label data-i18n="totpPeriodLabel">Okres</label>
+      <select id="totp-period">
+        <option value="30" selected data-i18n="period30">30 sekund</option>
+        <option value="60" data-i18n="period60">60 sekund</option>
+      </select>
+    </div>
+
+    <br />
+    <button class="btn btn-teal" onclick="generateTOTP()" data-i18n="generateTotp">Generuj klucz TOTP</button>
+    <div class="result-box" id="totp-results"></div>
+  </div>
+
+</div>
+
+<footer>
+  <span data-i18n-html="footer">Wszystkie operacje wykonywane są w przeglądarce — żadne dane nie są wysyłane na serwer.</span>
+</footer>
+
+<script>
+// ─── Translations ────────────────────────────────────────────────────────────
+const T = {
+  pl: {
+    title: 'Narzędzia VPN',
+    subtitle: 'Generator łatwych do zapamiętania haseł i konfiguracja TOTP / Google Authenticator',
+    pwCardTitle: 'Generator haseł VPN',
+    styleLabel: 'Styl',
+    styleWords: 'Łatwe do zapamiętania',
+    styleRandom: 'Losowe znaki',
+    wordCountLabel: 'Liczba słów',
+    words2: '2 słowa', words3: '3 słowa', words4: '4 słowa',
+    lengthLabel: 'Długość',
+    sepLabel: 'Separator',
+    sepDash: 'Myślnik  (słowo-słowo)',
+    sepDot:  'Kropka  (słowo.słowo)',
+    sepUnder:'Podkreślnik  (słowo_słowo)',
+    sepNone: 'Brak  (słowosłowo)',
+    capLabel: 'Wielkie litery',
+    capFirst: 'Pierwsza litera',
+    capAll:   'Wszystkie słowa',
+    capNone:  'Brak',
+    addDigits: 'Dodaj cyfry',
+    addSymbol: 'Dodaj symbol',
+    countLabel: 'Ile haseł',
+    generatePw: 'Generuj hasła',
+    pwPrefix: 'Hasło',
+    strengthStrong: '✓ Silne',
+    strengthMedium: '~ Średnie',
+    strengthWeak:   '⚠ Słabe',
+    copy: 'Kopiuj', copied: 'Skopiowano!',
+    totpCardTitle: 'TOTP / Google Authenticator',
+    totpLabelLabel: 'Nazwa konta',
+    totpLabelPlaceholder: 'np. JanNowak',
+    totpIssuerLabel: 'Wydawca',
+    totpPeriodLabel: 'Okres',
+    period30: '30 sekund', period60: '60 sekund',
+    generateTotp: 'Generuj klucz TOTP',
+    secretLabel: 'Klucz BASE32',
+    uriLabel: 'OTPAuth URI',
+    qrLabel: 'Kod QR — zeskanuj w Google Authenticator',
+    footer: 'Wszystkie operacje wykonywane są w przeglądarce — żadne dane nie są wysyłane na serwer.',
+  },
+  en: {
+    title: 'VPN Tools',
+    subtitle: 'Memorable password generator & TOTP / Google Authenticator setup',
+    pwCardTitle: 'VPN Password Generator',
+    styleLabel: 'Style',
+    styleWords: 'Memorable words',
+    styleRandom: 'Random characters',
+    wordCountLabel: 'Word count',
+    words2: '2 words', words3: '3 words', words4: '4 words',
+    lengthLabel: 'Length',
+    sepLabel: 'Separator',
+    sepDash: 'Dash  (word-word)',
+    sepDot:  'Dot  (word.word)',
+    sepUnder:'Underscore  (word_word)',
+    sepNone: 'None  (wordword)',
+    capLabel: 'Capitalise',
+    capFirst: 'First letter',
+    capAll:   'All words',
+    capNone:  'None',
+    addDigits: 'Add digits',
+    addSymbol: 'Add symbol',
+    countLabel: 'How many passwords',
+    generatePw: 'Generate Passwords',
+    pwPrefix: 'Password',
+    strengthStrong: '✓ Strong',
+    strengthMedium: '~ Medium',
+    strengthWeak:   '⚠ Weak',
+    copy: 'Copy', copied: 'Copied!',
+    totpCardTitle: 'TOTP / Google Authenticator',
+    totpLabelLabel: 'Account name',
+    totpLabelPlaceholder: 'e.g. JanNowak',
+    totpIssuerLabel: 'Issuer',
+    totpPeriodLabel: 'Period',
+    period30: '30 seconds', period60: '60 seconds',
+    generateTotp: 'Generate TOTP Key',
+    secretLabel: 'BASE32 Secret Key',
+    uriLabel: 'OTPAuth URI',
+    qrLabel: 'QR Code — scan with Google Authenticator',
+    footer: 'All generation happens <strong>in your browser</strong> — nothing is sent to any server.',
+  }
+};
+
+let currentLang = 'pl';
+
+function setLang(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+
+  // toggle active button
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === lang);
+  });
+
+  const t = T[lang];
+
+  // text content
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (t[key] !== undefined) el.textContent = t[key];
+  });
+
+  // html content
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.dataset.i18nHtml;
+    if (t[key] !== undefined) el.innerHTML = t[key];
+  });
+
+  // placeholders
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.dataset.i18nPlaceholder;
+    if (t[key] !== undefined) el.placeholder = t[key];
+  });
+
+  // document title
+  document.title = lang === 'pl'
+    ? 'Narzędzia VPN — Generator haseł i TOTP'
+    : 'VPN Tools — Password & TOTP Generator';
+
+  // re-render results if visible
+  const pwBox = document.getElementById('pw-results');
+  if (pwBox.classList.contains('show')) generatePasswords();
+  const totpBox = document.getElementById('totp-results');
+  if (totpBox.classList.contains('show')) generateTOTP();
+}
+
+// ─── Word list ───────────────────────────────────────────────────────────────
+const WORDS = [
+  'able','acid','agile','alert','amber','ample','angel','anvil','apex','apple',
+  'arch','arctic','arena','arrow','atlas','audio','azure','badge','baker','bald',
+  'barn','base','beach','beam','bean','bear','bell','bench','berry','birch',
+  'blade','blaze','blend','block','bloom','blue','board','bolt','bond','bone',
+  'book','boost','brake','brave','bread','brick','bridge','brief','bright','brook',
+  'brown','brush','burst','cabin','cable','calm','camp','candy','cargo','carve',
+  'cedar','chain','chalk','chart','chase','check','chief','chrome','cider','cinder',
+  'cipher','civic','civil','clamp','clean','clear','climb','clone','cloud','clover',
+  'coach','coast','cobra','code','comet','coral','crest','crisp','cross','crown',
+  'crush','cycle','dagger','daily','delta','dense','depot','depth','derby','drift',
+  'drill','drive','drone','drum','dune','dusk','dust','eagle','earth','echo',
+  'edge','eight','elder','ember','epic','epoch','equal','event','exact','excel',
+  'extra','fable','facet','falcon','field','final','first','fixed','flame','flash',
+  'fleet','flex','float','flood','flora','flow','fluid','focal','force','forge',
+  'forum','frame','frank','frost','fudge','fuel','fully','gavel','giant','glare',
+  'glass','globe','gloss','glyph','gold','grace','grade','grain','grand','graph',
+  'grasp','green','grid','grove','guard','guide','guild','habit','haven','heart',
+  'heavy','helix','helm','hero','heron','honor','horse','hydro','igloo','image',
+  'inbox','indie','index','inner','input','intel','ionic','iron','ivory','jade',
+  'jewel','joint','judge','karma','kayak','keen','kernel','kilo','known','lance',
+  'laser','layer','learn','ledge','level','light','limit','linen','local','lodge',
+  'logic','lunar','lunge','maple','march','marsh','match','medal','merit','metal',
+  'model','mono','moral','motor','mount','naval','nexus','noble','north','notch',
+  'novel','nylon','ocean','olive','orbit','order','outer','oxide','ozone','panel',
+  'paper','patch','pause','pearl','pedal','pilot','pixel','pivot','plain','plane',
+  'plant','plate','plaza','pluck','plumb','point','polar','porch','power','press',
+  'prime','prism','probe','proud','pulse','quest','quick','quiet','quota','radar',
+  'radio','rally','range','rapid','ratio','raven','reach','ready','realm','rebel',
+  'relay','remix','renew','reset','ridge','right','rivet','river','robot','rocky',
+  'royal','ruler','rural','safer','sage','salvo','sand','scale','scout','sharp',
+  'shift','shore','sight','sigma','silky','slate','sleek','slope','smart','smoke',
+  'solar','solid','south','spark','speed','spire','split','sport','squad','stack',
+  'staff','stage','stake','steel','stern','stone','storm','strap','strike','strip',
+  'strong','style','super','surge','swift','swirl','sword','table','tango','thorn',
+  'tiger','timer','title','token','topaz','torch','tower','trace','track','trade',
+  'trail','train','trust','turbo','ultra','unity','upper','urban','valid','valor',
+  'valve','vault','visor','vista','vital','vivid','voice','volts','vortex','voter',
+  'watch','water','weave','wedge','white','width','winds','witty','world','worth',
+  'xenon','yield','young','zebra','zenith','zero'
+];
+
+const SYMBOLS = '!@#$%^&*-+=?';
+const DIGITS  = '0123456789';
+
+function rand(n) { return Math.floor(Math.random() * n); }
+function pick(arr) { return arr[rand(arr.length)]; }
+function randChar(set) { return set[rand(set.length)]; }
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ─── Password helpers ─────────────────────────────────────────────────────────
+function makeWordPassword(wordCount, sep, capMode, addDigits, addSymbol) {
+  const words = Array.from({length: wordCount}, () => {
+    const w = pick(WORDS);
+    return capMode === 'none' ? w : w.charAt(0).toUpperCase() + w.slice(1);
+  });
+
+  let base = words.join(sep);
+  let extras = [];
+  if (addDigits) extras.push(String(rand(900) + 100));
+  if (addSymbol) extras.push(randChar(SYMBOLS));
+  extras = shuffle(extras);
+
+  if (extras.length === 0) return base;
+  return rand(2) === 0 ? base + sep + extras.join('') : extras.join('') + sep + base;
+}
+
+function makeRandomPassword(length, addDigits, addSymbol) {
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let pool = lower + upper;
+  if (addDigits) pool += DIGITS;
+  if (addSymbol) pool += SYMBOLS;
+
+  const required = [pick([...lower]), pick([...upper])];
+  if (addDigits)  required.push(randChar(DIGITS));
+  if (addSymbol)  required.push(randChar(SYMBOLS));
+  for (let i = required.length; i < length; i++) required.push(randChar(pool));
+  return shuffle(required).join('');
+}
+
+function scorePassword(pw) {
+  let s = 0;
+  if (pw.length >= 12) s++;
+  if (pw.length >= 20) s++;
+  if (/[A-Z]/.test(pw)) s++;
+  if (/[a-z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^a-zA-Z0-9]/.test(pw)) s++;
+  return s;
+}
+
+function strengthBadge(score) {
+  const t = T[currentLang];
+  if (score >= 5) return `<span class="badge badge-strong">${t.strengthStrong}</span>`;
+  if (score >= 3) return `<span class="badge badge-medium">${t.strengthMedium}</span>`;
+  return `<span class="badge badge-weak">${t.strengthWeak}</span>`;
+}
+
+// ─── UI toggle ────────────────────────────────────────────────────────────────
+document.getElementById('pw-style').addEventListener('change', function() {
+  const isWords = this.value === 'words';
+  document.getElementById('words-count-wrap').style.display = isWords ? '' : 'none';
+  document.getElementById('random-len-wrap').style.display  = isWords ? 'none' : '';
+  document.getElementById('word-options').style.display     = isWords ? '' : 'none';
+});
+
+// ─── Generate passwords ───────────────────────────────────────────────────────
+function generatePasswords() {
+  const t = T[currentLang];
+  const style     = document.getElementById('pw-style').value;
+  const count     = Math.min(10, Math.max(1, parseInt(document.getElementById('pw-count').value) || 3));
+  const addDigits = document.getElementById('pw-digits').checked;
+  const addSymbol = document.getElementById('pw-symbol').checked;
+
+  const passwords = [];
+  for (let i = 0; i < count; i++) {
+    if (style === 'words') {
+      const wc  = parseInt(document.getElementById('pw-words').value);
+      const sep = document.getElementById('pw-sep').value;
+      const cap = document.getElementById('pw-cap').value;
+      passwords.push(makeWordPassword(wc, sep, cap, addDigits, addSymbol));
+    } else {
+      const len = Math.min(64, Math.max(8, parseInt(document.getElementById('pw-len').value) || 16));
+      passwords.push(makeRandomPassword(len, addDigits, addSymbol));
+    }
+  }
+
+  const box = document.getElementById('pw-results');
+  box.innerHTML = passwords.map((pw, i) => `
+    <div class="result-block">
+      <div class="result-label">${t.pwPrefix} ${i + 1}</div>
+      <div class="result-row">
+        <span class="result-value" id="pw-val-${i}">${pw}</span>
+        <button class="copy-btn" onclick="copyText('pw-val-${i}', this)">${t.copy}</button>
+      </div>
+      ${strengthBadge(scorePassword(pw))}
+    </div>
+    ${i < passwords.length - 1 ? '<hr class="divider">' : ''}
+  `).join('');
+  box.classList.add('show');
+}
+
+// ─── BASE32 ───────────────────────────────────────────────────────────────────
+function base32Encode(bytes) {
+  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let out = '', bits = 0, val = 0;
+  for (const byte of bytes) {
+    val = (val << 8) | byte;
+    bits += 8;
+    while (bits >= 5) { out += alpha[(val >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += alpha[(val << (5 - bits)) & 31];
+  return out;
+}
+
+function generateSecret() {
+  const buf = new Uint8Array(20);
+  crypto.getRandomValues(buf);
+  return base32Encode(buf);
+}
+
+// ─── Generate TOTP ────────────────────────────────────────────────────────────
+function generateTOTP() {
+  const t      = T[currentLang];
+  const label  = document.getElementById('totp-label').value.trim()  || 'VPN User';
+  const issuer = document.getElementById('totp-issuer').value.trim() || 'Cyfrowe VPN';
+  const period = document.getElementById('totp-period').value;
+  const secret = generateSecret();
+
+  const uri = `otpauth://totp/${encodeURIComponent(label)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=${period}`;
+
+  const box = document.getElementById('totp-results');
+  box.innerHTML = `
+    <div class="result-block">
+      <div class="result-label">${t.secretLabel}</div>
+      <div class="result-row">
+        <span class="result-value" id="totp-secret">${secret}</span>
+        <button class="copy-btn" onclick="copyText('totp-secret', this)">${t.copy}</button>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="result-block">
+      <div class="result-label">${t.uriLabel}</div>
+      <div class="result-row">
+        <span class="result-value" style="font-size:.78rem" id="totp-uri">${uri}</span>
+        <button class="copy-btn" onclick="copyText('totp-uri', this)">${t.copy}</button>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="result-block">
+      <div class="result-label">${t.qrLabel}</div>
+      <div id="qr-container"></div>
+    </div>
+  `;
+  box.classList.add('show');
+
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+  new QRCode(container, {
+    text: uri, width: 200, height: 200,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
+// ─── Copy helper ──────────────────────────────────────────────────────────────
+function copyText(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    const t = T[currentLang];
+    btn.textContent = t.copied;
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = t.copy; btn.classList.remove('copied'); }, 1800);
+  });
+}
+</script>
+</body>
+</html>
