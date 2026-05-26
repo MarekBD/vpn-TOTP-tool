@@ -204,8 +204,26 @@
       font-size: .72rem; font-weight: 600; margin-top: .35rem;
     }
     .badge-strong { background: rgba(0,212,170,.15); color: var(--success); }
+    .badge-ok     { background: rgba(163,230,53,.12); color: #a3e635; }
     .badge-medium { background: rgba(255,193,7,.15);  color: #ffc107; }
     .badge-weak   { background: rgba(255,107,107,.15);color: var(--danger); }
+
+    .pw-editable {
+      flex: 1;
+      font-family: 'Cascadia Code','Consolas',monospace;
+      font-size: 1rem;
+      word-break: break-all;
+      color: var(--accent2);
+      line-height: 1.4;
+      background: transparent;
+      border: none;
+      border-bottom: 1px dashed var(--border);
+      outline: none;
+      padding: .1rem .2rem;
+      cursor: text;
+      min-width: 0;
+    }
+    .pw-editable:focus { border-bottom-color: var(--accent); }
 
     #qr-container { display: flex; justify-content: center; margin-top: .75rem; }
     #qr-container canvas, #qr-container img {
@@ -365,6 +383,7 @@ const T = {
     generatePw: 'Generuj hasła',
     pwPrefix: 'Hasło',
     strengthStrong: '✓ Silne',
+    strengthOk:     '✓ OK',
     strengthMedium: '~ Średnie',
     strengthWeak:   '⚠ Słabe',
     copy: 'Kopiuj', copied: 'Skopiowano!',
@@ -404,6 +423,7 @@ const T = {
     generatePw: 'Generate Passwords',
     pwPrefix: 'Password',
     strengthStrong: '✓ Strong',
+    strengthOk:     '✓ OK',
     strengthMedium: '~ Medium',
     strengthWeak:   '⚠ Weak',
     copy: 'Copy', copied: 'Copied!',
@@ -655,7 +675,8 @@ function calcEntropy(style, wordCount, poolSize, addDigits, addSymbol, pwLength)
 function strengthBadge(bits) {
   const t = T[currentLang];
   const label = `~${bits} bit`;
-  if (bits >= 60) return `<span class="badge badge-strong">${t.strengthStrong} (${label})</span>`;
+  if (bits >= 80) return `<span class="badge badge-strong">${t.strengthStrong} (${label})</span>`;
+  if (bits >= 60) return `<span class="badge badge-ok">${t.strengthOk} (${label})</span>`;
   if (bits >= 35) return `<span class="badge badge-medium">${t.strengthMedium} (${label})</span>`;
   return `<span class="badge badge-weak">${t.strengthWeak} (${label})</span>`;
 }
@@ -674,7 +695,7 @@ function renderPasswordResults(passwords, bits) {
     <div class="result-block">
       <div class="result-label">${t.pwPrefix} ${i + 1}</div>
       <div class="result-row">
-        <span class="result-value" id="pw-val-${i}">${escHtml(pw)}</span>
+        <span class="pw-editable" id="pw-val-${i}" contenteditable="plaintext-only" spellcheck="false">${escHtml(pw)}</span>
         <button class="copy-btn" onclick="copyText('pw-val-${i}', this)">${t.copy}</button>
       </div>
       ${strengthBadge(bits)}
