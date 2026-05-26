@@ -688,6 +688,25 @@ document.getElementById('pw-style').addEventListener('change', function() {
   document.getElementById('word-options').style.display     = isWords ? '' : 'none';
 });
 
+function updateEditedBadge(el) {
+  const text = el.textContent;
+  if (!text) return;
+  let pool = 0;
+  if (/[a-z]/.test(text)) pool += 26;
+  if (/[A-Z]/.test(text)) pool += 26;
+  if (/[0-9]/.test(text)) pool += 10;
+  if (/[^a-zA-Z0-9]/.test(text)) pool += SYMBOLS.length;
+  if (pool < 2) pool = 2;
+  const bits = Math.round(text.length * Math.log2(pool));
+  const badge = el.closest('.result-block').querySelector('.badge');
+  if (!badge) return;
+  const t = T[currentLang];
+  const label = bits >= 80 ? t.strengthStrong : bits >= 60 ? t.strengthOk : bits >= 35 ? t.strengthMedium : t.strengthWeak;
+  const cls   = bits >= 80 ? 'badge-strong'   : bits >= 60 ? 'badge-ok'     : bits >= 35 ? 'badge-medium'   : 'badge-weak';
+  badge.className = `badge ${cls}`;
+  badge.textContent = `${label} (~${bits} bit)`;
+}
+
 function renderPasswordResults(passwords, bits) {
   const t = T[currentLang];
   const box = document.getElementById('pw-results');
@@ -702,6 +721,7 @@ function renderPasswordResults(passwords, bits) {
     </div>
     ${i < passwords.length - 1 ? '<hr class="divider">' : ''}
   `).join('');
+  box.querySelectorAll('.pw-editable').forEach(el => el.addEventListener('input', () => updateEditedBadge(el)));
   box.classList.add('show');
 }
 
